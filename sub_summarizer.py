@@ -1,59 +1,49 @@
 import os
-import json
 import openai
-from pathlib import Path
 from dotenv import load_dotenv
 
 
 class SubTopicSummarizer:
-    def __init__(self, input_dir, output_dir, model="gpt-4o-mini"):
+    """이미 주어진 sub topic에 매칭된 세그먼트들을 하나로 묶어 topic 단위 요약을 생성한다."""
+
+    def __init__(self, model="gpt-4o-mini", temperature=0.3):
         load_dotenv()
         openai.api_key = os.getenv("OPENAI_API_KEY")
-        self.input_dir, self.output_dir = Path(input_dir), Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.model = model
+        self.temperature = temperature
 
-    def generate_summary(self, topic, sentences):
-        text = " ".join(sentences)
-        prompt = f"""
-    You are an expert in writing summaries of meeting transcripts.
-
-    Below, you are given a meeting topic and a set of sentences collected from meeting utterances related to that topic.
-    Your task is to write a meeting summary based on the sentences, focusing on the given topic.
-
-    Topic:
-    {topic}
-    
-    Instructions:
-        1. Write in a concise and clear style, similar to news articles.
-        2. The summary should be around 4 sentences.
-        3. Only output the summary.
-        4. Write in Korean.
-
-    Sentences:
-    {text}
-
-    Summary:
-    """
-        response = openai.chat.completions.create(
+    def _chat(self, messages):
+        resp = openai.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5, max_tokens=500
+            messages=messages,
+            temperature=self.temperature,
+            timeout=30,
         )
-        return response.choices[0].message.content.strip()
+        return resp.choices[0].message.content.strip()
 
-    def run(self):
-        for file in sorted(self.input_dir.glob("*_topic_segments.json")):
-            with open(file, "r", encoding="utf-8") as f:
-                topic_segments = json.load(f)
-            result = {}
-            for topic, segs in topic_segments.items():
-                sents = []
-                for seg in sorted(segs, key=lambda x: x.get("rank", 999)):
-                    sents.extend(seg.get("sentences", []))
-                if not sents: continue
-                summary = self.generate_summary(topic, sents)
-                result[topic] = {"summary": summary, "count": len(sents)}
-            out_path = self.output_dir / file.name.replace("_topic_segments.json", "_topic_summaries.json")
-            json.dump(result, open(out_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-            print(f"🧾 Sub-topic 요약 저장 완료: {out_path.name}")
+    def summarize_topic(self, topic, sentences):
+        if not sentences:
+            return ""
+
+        text = " ".join(sentences)
+        prompt = f"""You are an expert in writing summaries of meeting transcripts.
+
+Below, you are given a meeting topic and a set of sentences collected from meeting utterances related to that topic.
+Your task is to write a meeting summary based on the sentences, focusing on the given topic.
+
+Topic:
+{topic}
+
+Instructions:
+    1. Write in a concise and clear style, similar to news articles.
+    2. The summary should be around 4 sentences.
+    3. Only output the summary.
+    4. Write in Korean.
+
+Sentences:
+{text}
+
+Summary:""".strip()
+
+        messages = [{"role": "user", "content": prompt}]
+        return self._chat(messages)
