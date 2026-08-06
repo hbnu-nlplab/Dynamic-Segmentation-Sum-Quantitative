@@ -72,7 +72,9 @@ class KormoBackend:
             output_ids[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
         ).strip()
 
-    # 아래 4개 메서드는 train.py의 프롬프트 템플릿과 동일하게 유지해야 LoRA 학습 분포와 맞는다.
+    # 아래 4개 메서드는 원래 train.py의 프롬프트 템플릿과 동일하게 유지해야 LoRA 학습 분포와 맞지만,
+    # generate_totalsum(sentence_range)과 generate_speakersum(문장 수)은 GPT 출력과 형태를 맞추기 위해
+    # 의도적으로 문장 수 지시를 바꿨다 (학습 분포와 달라져 품질이 낮아질 수 있음을 감수).
 
     def generate_segsum(self, span_text_block):
         prompt = f"""
@@ -123,7 +125,7 @@ Sub topic:
 """.strip()
         return self._generate(prompt)
 
-    def generate_totalsum(self, summaries):
+    def generate_totalsum(self, summaries, sentence_range="4~5"):
         concat = "\n".join(f"[Segment Summary {i}] {s}" for i, s in enumerate(summaries, 1))
         prompt = f"""
 You are an expert in meeting summarization.
@@ -133,7 +135,7 @@ Your task is to generate a total summary of the whole meeting based on the segme
 
 Instructions:
 1. Write in a concise and clear style, similar to news articles.
-2. The summary should be around 4~5 sentences.
+2. The summary should be around {sentence_range} sentences.
 3. Only output the summary.
 4. Write in Korean.
 
@@ -154,7 +156,7 @@ Your task is to summarize what speaker "{speaker}" said in this segment, using t
 Instructions:
 1. Focus on the speaker's main claims, opinions, or reactions.
 2. If the speaker only gave simple reactions with no substantial content, output "주요 내용 없음".
-3. Write in 1 sentences.
+3. Write in 3 sentences.
 4. Only output the summary.
 5. Write in Korean.
 

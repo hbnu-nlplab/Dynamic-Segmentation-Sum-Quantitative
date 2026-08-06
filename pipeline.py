@@ -107,6 +107,25 @@ class SummaryPipeline:
                     return self.kormo_backend.generate_totalsum(ordered)
             return self.total_summarizer.generate_total_summary(ordered)
 
+        def gen_total_topic(ordered_summaries, ordered_topics):
+            if use_kormo:
+                # 전용 학습 태스크가 없어, Kormo는 subtopic 프롬프트를 재사용한다
+                # (span_text_block 자리에 세그먼트 토픽들을, summary_text 자리에 세그먼트 요약들을 넣음)
+                with self._gpu_lock:
+                    return self.kormo_backend.generate_subtopic(
+                        "\n".join(ordered_topics), "\n".join(ordered_summaries)
+                    )
+            return self.total_summarizer.generate_total_topic(ordered_summaries, ordered_topics)
+
+        def gen_speaker_overall(speaker, segment_summaries):
+            if use_kormo:
+                # 전용 학습 태스크가 없어, Kormo는 totalsum 프롬프트를 재사용한다
+                # (여러 구간 요약을 하나로 합친다는 점에서 구조가 동일). GPT와 문장 수를 맞추기 위해
+                # sentence_range를 3~5로 지정한다 (기본값 4~5는 total_summary용).
+                with self._gpu_lock:
+                    return self.kormo_backend.generate_totalsum(segment_summaries, sentence_range="3~5")
+            return self.speaker_summarizer.summarize_speaker_overall(speaker, segment_summaries)
+
         summary_map = {}
         for seg in segments:
             sentences = seg["sentences"]
@@ -145,11 +164,24 @@ class SummaryPipeline:
         ordered = [summary_map[sid] for sid in sorted(summary_map) if summary_map[sid]]
         total_summary = gen_total(ordered) if ordered else ""
 
-        merged_segments = [
+        ordered_topics = [topic_map[seg["id"]] for seg in segments if topic_map.get(seg["id"])]
+        total_topic = gen_total_topic(ordered, ordered_topics) if ordered and ordered_topics else ""
+
+        speaker_segment_summaries = defaultdict(list)
+        for seg in segments:
+            for speaker, summary in speaker_result.get(seg["id"], {}).items():
+                if summary and not summary.startswith("[ERROR]"):
+                    speaker_segment_summaries[speaker].append(summary)
+
+        overall_speaker_summaries = {
+            speaker: gen_speaker_overall(speaker, summaries)
+            for speaker, summaries in speaker_segment_summaries.items()
+        }
+
+        merged_topics = [
             {
-                "id": seg["id"],
-                "summary": summary_map.get(seg["id"], ""),
                 "topic": topic_map.get(seg["id"], ""),
+                "summary": summary_map.get(seg["id"], ""),
                 "speaker_summaries": speaker_result.get(seg["id"], {}),
             }
             for seg in segments
@@ -159,8 +191,10 @@ class SummaryPipeline:
             "file": filename,
             "type": "wo_st",
             "model": "kormo" if use_kormo else "gpt",
+            "total_topic": total_topic,
             "total_summary": total_summary,
-            "segments": merged_segments,
+            "speaker_summaries": overall_speaker_summaries,
+            "topics": merged_topics,
         }
 
     # ------------------------------------------------------------------

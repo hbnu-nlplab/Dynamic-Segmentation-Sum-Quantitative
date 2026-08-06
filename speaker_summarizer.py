@@ -21,7 +21,7 @@ class SpeakerSummarizer:
 
     def summarize_speaker(self, seg_id, speaker, utterances, full_segment):
         prompt = f"""아래는 하나의 대화 구간(segment {seg_id}) 전체 내용과, 그 중 화자 "{speaker}"의 발화 문장들입니다.
-전체 문맥을 참고하여 해당 화자가 이 구간에서 어떤 내용을 말했는지 1문장으로 요약해 주세요.
+전체 문맥을 참고하여 해당 화자가 이 구간에서 어떤 내용을 말했는지 3문장으로 요약해 주세요.
 
 요약 조건:
 - 화자의 주요 주장·의견·반응을 중심으로 작성하세요.
@@ -42,6 +42,31 @@ class SpeakerSummarizer:
             return self._chat(messages)
         except Exception as e:
             print(f"❌ GPT 실패 - seg={seg_id} speaker={speaker} | {e}")
+            return "[ERROR] GPT 호출 실패"
+
+    def summarize_speaker_overall(self, speaker, segment_summaries):
+        combined = "\n".join(f"- {s}" for s in segment_summaries)
+
+        prompt = f"""아래는 화자 "{speaker}"가 회의의 각 구간에서 말한 내용을 요약한 목록입니다.
+이 내용들을 종합해서, 이 화자가 전체 회의에서 어떤 내용을 말했는지 3~5문장으로 요약해 주세요.
+
+요약 조건:
+- 화자의 주요 주장·의견·반응을 중심으로, 구간별 요약을 자연스럽게 통합해서 작성하세요.
+- 머리말 없이 요약문만 출력하세요.
+
+[화자 "{speaker}"의 구간별 요약]
+{combined}
+
+Summary:""".strip()
+
+        messages = [
+            {"role": "system", "content": "당신은 화자 한 명의 발언을 회의 전체 관점에서 종합 요약하는 전문가입니다."},
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            return self._chat(messages)
+        except Exception as e:
+            print(f"❌ GPT 실패 - overall speaker={speaker} | {e}")
             return "[ERROR] GPT 호출 실패"
 
     def summarize_speaker_for_topic(self, topic, speaker, utterances, all_items):

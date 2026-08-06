@@ -1,6 +1,3 @@
-# torch는 버전을 고정하지 않는다: base 이미지(pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime)에
-# CUDA와 맞물린 버전이 이미 설치돼 있고, 여기서 버전 없이 두면 pip가 이를 재설치/업그레이드하지 않는다.
-# (base 이미지를 바꾸면 이 동작도 같이 확인할 것)
 torch
 transformers==4.57.0
 accelerate

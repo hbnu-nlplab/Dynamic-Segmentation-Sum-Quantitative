@@ -4,12 +4,11 @@ from dotenv import load_dotenv
 
 
 class TotalSummarizer:
-    def __init__(self, model="gpt-4o-mini", temperature=0.3, max_seg_summaries=None):
+    def __init__(self, model="gpt-4o-mini", temperature=0.3):
         load_dotenv()
         openai.api_key = os.getenv("OPENAI_API_KEY")
         self.model = model
         self.temperature = temperature
-        self.max_seg_summaries = max_seg_summaries
 
     def _chat(self, messages):
         resp = openai.chat.completions.create(
@@ -46,16 +45,34 @@ Final Summary:""".strip()
         ]
         return self._chat(messages)
 
-    def summarize(self, summary_map):
-        """summary_map: {id: summary} (segment id 순서대로 정렬해 전체 요약 생성)"""
-        ordered = [summary_map[sid].strip() for sid in sorted(summary_map) if summary_map[sid]]
-        if not ordered:
-            return ""
+    def generate_total_topic(self, segment_summaries, segment_topics):
+        numbered_summaries = "\n".join(f"{i}. {s}" for i, s in enumerate(segment_summaries, 1))
+        topics_list = "\n".join(f"- {t}" for t in segment_topics)
 
-        if self.max_seg_summaries:
-            ordered = ordered[:self.max_seg_summaries]
+        prompt = f"""You are an expert at expressing the overall topic of a meeting as a Korean noun phrase.
 
-        return self.generate_total_summary(ordered)
+Below are the segment-level summaries and segment-level topics from one meeting.
+Your task is to generate a total topic that represents the entire meeting, written as a short Korean phrase.
+
+Instructions:
+- Capture the overarching theme that ties the segments together, not just one segment's detail.
+- Output a single phrase only.
+- Do not include any preamble, numbering, or explanation.
+- Write in Korean.
+
+Segment Summaries:
+{numbered_summaries}
+
+Segment Topics:
+{topics_list}
+
+Total topic:""".strip()
+
+        messages = [
+            {"role": "system", "content": "당신은 회의 전체 주제를 한국어 명사구로 표현하는 전문가입니다."},
+            {"role": "user", "content": prompt},
+        ]
+        return self._chat(messages)
 
     def generate_total_summary_with_topic(self, total_topic, sub_topic_summaries):
         combined = "\n".join(f"- {s}" for s in sub_topic_summaries)
@@ -80,11 +97,3 @@ Guidelines:
 
         messages = [{"role": "user", "content": prompt}]
         return self._chat(messages)
-
-    def summarize_with_topic(self, total_topic, topic_summary_map):
-        """topic_summary_map: {topic: {"summary": str, ...}} (sub topic이 주어진 경우)"""
-        summaries = [v["summary"].strip() for v in topic_summary_map.values() if v.get("summary")]
-        if not summaries:
-            return ""
-
-        return self.generate_total_summary_with_topic(total_topic, summaries)
