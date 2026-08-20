@@ -72,11 +72,13 @@ docker run -d \
   --env-file .env \
   -e QWEN_DEVICE_MAP=cuda:0 \
   -e KORMO_DEVICE_MAP=cuda:1 \
+  -v /home/kilab_ndw/Dynamic-Segmentation-Sum_docker/dataset_new_schema:/app/data \
   meeting-summary-api:v1
 ```
 - GPU 인덱스는 컨테이너 안에서 `--gpus all`로 다 보이는 순서 기준
 - 특정 GPU만 컨테이너에 노출하고 싶으면 `--gpus '"device=0,1"'` 형태로 제한 가능
 - QWEN_DEVICE_MAP과 KORMO_DEVICE_MAP이 cuda:0, 1로 지정되어있는건 예시이며 **비어있는 GPU 지정 필요**
+- 디렉토리 일괄 처리(`/summarize_dir`)를 쓰려면 `-v /host/dataset/path:/app/data`로 데이터 디렉토리도 마운트 (5장 참고)
 ---
 ### 4-3. 동작 확인
 ```bash
@@ -152,6 +154,49 @@ curl -X POST http://localhost:8000/summarize \
   -o output.json
 ```
 
+#### 디렉토리 일괄 처리 — `POST /summarize_dir`
+파일 하나씩이 아니라, **서버 쪽 디렉토리 안의 모든 `.json` 파일을 한 번에** 처리하고 싶을 때 사용합니다.
+
+| 필드 | 설명 |
+|---|---|
+| `dir_path` | `DATA_DIR` 기준 **상대경로**. 하위 디렉토리는 재귀적으로 훑지 않고, 지정한 디렉토리 바로 아래의 `.json`만 대상으로 함 |
+| `type` / `model` | `/summarize`와 동일 |
+
+`dir_path`는 서버 파일시스템 경로라서, 컨테이너로 띄울 때는 실제 데이터가 있는 호스트 디렉토리를 `DATA_DIR`(기본 `/app/data`)에 볼륨으로 마운트해야 합니다:
+```bash
+docker run -d \
+  --name meeting-summary-api \
+  --gpus all \
+  -p 8000:8000 \
+  --env-file .env \
+  -v /host/dataset/path:/app/data \
+  meeting-summary-api:v1
+```
+
+```bash
+curl -X POST http://localhost:8000/summarize_dir \
+  -F "dir_path=01차_인공지능" \
+  -F "type=wo_st" \
+  -o batch_output.json
+```
+- `dir_path`로 `DATA_DIR` 바깥 경로(`../../etc`, 절대경로 등)를 주면 400으로 거부됩니다 (임의 파일 접근 방지).
+- 파일 하나가 깨져있거나 처리 중 실패해도 전체 요청이 죽지 않고, 그 파일의 결과 자리에 `{"file": ..., "error": ...}`만 남긴 채 나머지는 계속 처리됩니다.
+- 파일 수가 많으면 응답이 올 때까지 오래 걸릴 수 있습니다 (파일마다 순차 처리). curl에 타임아웃을 걸어뒀다면 넉넉하게 늘려야 합니다 (예: `--max-time 0`).
+
+응답 형식:
+```json
+{
+  "dir": "01차_인공지능",
+  "type": "wo_st",
+  "model": "gpt",
+  "total": 3,
+  "succeeded": 2,
+  "results": [
+    { "file": "a.json", "...": "정상 처리된 /summarize와 동일한 응답" },
+    { "file": "b.json", "error": "유효한 JSON이 아닙니다." }
+  ]
+}
+```
 
 #### 응답 예시 — `wo_st` (실제 응답 발췌)
 ```json

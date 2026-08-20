@@ -24,6 +24,10 @@ COPY kormo_multitask_merged/ ./kormo_multitask_merged/
 ENV MODEL_NAME=/app/models--Qwen--Qwen3-Embedding-8B/snapshots/1d8ad4ca9b3dd8059ad90a75d4983776a23d44af
 ENV KORMO_MODEL_DIR=/app/kormo_multitask_merged
 ENV OPENAI_MODEL=gpt-4o-mini
+# /summarize_dir이 접근을 허용하는 루트. 실제 데이터셋 디렉토리는
+# `docker run -v <호스트 경로>:/app/data`로 이 경로에 마운트해서 사용한다.
+ENV DATA_DIR=/app/data
+RUN mkdir -p /app/data
 
 EXPOSE 8000
 
