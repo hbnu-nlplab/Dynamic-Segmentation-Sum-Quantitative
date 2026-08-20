@@ -72,7 +72,6 @@ docker run -d \
   --env-file .env \
   -e QWEN_DEVICE_MAP=cuda:0 \
   -e KORMO_DEVICE_MAP=cuda:1 \
-  -v /home/kilab_ndw/Dynamic-Segmentation-Sum_docker/dataset_new_schema:/app/data \
   meeting-summary-api:v1
 ```
 - GPU 인덱스는 컨테이너 안에서 `--gpus all`로 다 보이는 순서 기준
@@ -175,7 +174,7 @@ docker run -d \
 
 ```bash
 curl -X POST http://localhost:8000/summarize_dir \
-  -F "dir_path=01차_인공지능" \
+  -F "dir_path=wo_st" \
   -F "type=wo_st" \
   -o batch_output.json
 ```
@@ -186,7 +185,7 @@ curl -X POST http://localhost:8000/summarize_dir \
 응답 형식:
 ```json
 {
-  "dir": "01차_인공지능",
+  "dir": "wo_st",
   "type": "wo_st",
   "model": "gpt",
   "total": 3,
